@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>SeñaVoz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+:root{--bg:#F4F6F8;--ink:#10243A;--muted:#566677;--panel:#FFFFFF;--line:#D3DBE3;--accent:#1B4F8A;--on-accent:#FFFFFF;--sig:#F2B632;--cap:22px}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0C1520;--ink:#EAF0F6;--muted:#93A3B5;--panel:#142233;--line:#26384D;--accent:#8FBBF2;--on-accent:#0C1520}}
+:root[data-theme="dark"]{--bg:#0C1520;--ink:#EAF0F6;--muted:#93A3B5;--panel:#142233;--line:#26384D;--accent:#8FBBF2;--on-accent:#0C1520}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--ink);font-family:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.4;display:flex;flex-direction:column;height:100dvh;padding-top:env(safe-area-inset-top,0px)}
+header{padding:6px 12px 0;flex-shrink:0}
+h1{font-size:18px;margin:0}
+#lobby{flex:1;overflow-y:auto;padding:8px 14px 20px;max-width:720px;width:100%;margin:0 auto}
+#call{display:none;flex:1;min-height:0;flex-direction:column;max-width:720px;width:100%;margin:0 auto;padding:0 12px}
+.stage{position:relative;flex-shrink:0;height:clamp(130px,30dvh,360px);background:#0A141F;border-radius:12px;overflow:hidden;border:1px solid var(--line);margin-top:4px}
+#grid{position:absolute;inset:0;display:grid;grid-template-columns:1fr;gap:2px}
+.tile{position:relative;display:none;min-width:0;min-height:0;background:#0A141F}
+.tile video{display:block;width:100%;height:100%;object-fit:cover}
+.tag{position:absolute;left:6px;bottom:6px;background:rgba(10,20,32,.75);color:#fff;font-size:12px;padding:1px 7px;border-radius:6px}
+#lv{display:none;position:absolute;top:6px;right:6px;z-index:2;height:36%;aspect-ratio:3/4;object-fit:cover;border-radius:8px;border:2px solid var(--sig);transform:scaleX(-1);background:#000}
+.empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:16px;color:#C9D6E3;font-size:15px}
+.cap{flex-shrink:0;margin-top:6px;height:calc(var(--cap)*2.8);overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--sig);border-radius:10px;padding:6px 10px;font-size:var(--cap);line-height:1.25}
+.cap:empty::before{content:"Aquí aparecen los subtítulos";color:var(--muted);font-size:15px}
+.row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+#call .row{flex-shrink:0;margin:6px 0 2px}
+button{font:inherit;font-size:14px;border-radius:8px;border:1.5px solid var(--accent);background:transparent;color:var(--accent);padding:4px 10px;min-height:34px;cursor:pointer}
+button.main-btn,button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+button:focus-visible,input:focus-visible{outline:3px solid var(--sig);outline-offset:2px}
+#lobby button{font-size:16px;min-height:42px;padding:8px 14px}
+.hint{color:var(--muted);font-size:14px;margin:0 0 4px;flex-shrink:0}
+#log{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:4px 0 6px}
+.msg{max-width:88%;padding:6px 10px;border-radius:10px;border:1px solid var(--line);background:var(--panel);font-size:calc(var(--cap) - 4px)}
+.msg small{display:block;color:var(--muted);font-size:12px;margin-bottom:1px}
+.msg.mine{align-self:flex-end;border-color:var(--accent)}
+.compose{display:none;flex-shrink:0;background:var(--panel);border-top:1px solid var(--line);padding:6px 12px calc(6px + env(safe-area-inset-bottom,0px))}
+.compose .in{max-width:720px;margin:0 auto}
+.send{display:flex;gap:6px}
+input[type=text]{flex:1;min-width:0;font:inherit;font-size:16px;padding:7px 10px;border-radius:8px;border:2px solid var(--line);background:var(--bg);color:var(--ink)}
+#lobby input[type=text]{padding:10px 12px;margin-bottom:8px;width:100%;flex:none}
+.code{font-size:26px;font-weight:700;letter-spacing:.12em}
+.who{display:flex;gap:8px;margin:8px 0}
+.who button{flex:1}
+</style>
+</head>
+<body>
+<header><h1>SeñaVoz</h1></header>
+
+<section id="lobby">
+  <p>Videollamada entre personas sordas y oyentes, en salas de hasta 3 personas.</p>
+  <input type="text" id="nm" placeholder="Tu nombre" autocomplete="off" aria-label="Tu nombre" maxlength="20">
+  <p style="margin:0">¿Quién eres?</p>
+  <div class="who" role="group" aria-label="¿Quién eres?">
+    <button id="rS" aria-pressed="false">Soy persona sorda</button>
+    <button id="rO" aria-pressed="false">Soy oyente</button>
+  </div>
+  <p>Una persona crea la sala y comparte el código con las demás.</p>
+  <div class="row"><button class="main-btn" id="btnNew">Crear sala</button></div>
+  <form class="send" onsubmit="return false">
+    <input type="text" id="code" placeholder="Código de la sala" autocomplete="off" aria-label="Código de la sala" maxlength="12" style="flex:1;margin:0">
+    <button id="btnJoin" type="button">Entrar</button>
+  </form>
+  <p class="hint" id="lobbyMsg"></p>
+</section>
+
+<section id="call">
+  <div class="stage">
+    <div id="grid"></div>
+    <video id="lv" playsinline muted autoplay></video>
+    <div class="empty" id="empty"></div>
+  </div>
+  <div class="cap" id="cap" aria-live="polite"></div>
+  <div class="row">
+    <button id="btnListen" aria-pressed="false">Subtitular mi voz</button>
+    <button id="btnVoice" aria-pressed="true">Texto + voz</button>
+    <button id="sm" aria-label="Letra más pequeña">A−</button>
+    <button id="lg" aria-label="Letra más grande">A+</button>
+    <button id="btnFull">Pantalla completa</button>
+    <button id="btnLeave">Salir</button>
+  </div>
+  <p class="hint" id="status"></p>
+  <div id="log" aria-live="polite"></div>
+</section>
+
+<div class="compose" id="compose">
+  <div class="in">
+    <form class="send" onsubmit="return false">
+      <input type="text" id="msg" placeholder="Escribe un mensaje" autocomplete="off" aria-label="Mensaje">
+      <button class="main-btn" id="btnSend" type="button">Enviar</button>
+    </form>
+  </div>
+</div>
+
+<script>
+(function(){
+  var $=function(id){return document.getElementById(id)};
+  var PREFIX='senavoz-',MAX_OTHERS=2;
+  var peer=null,stream=null,isHost=false,roomCode='',P={};
+  var myRole='',myName='';
+  var rec=null,listening=false,voiceOn=true,size=22,lastCap=0;
+
+  if(window.visualViewport){
+    var fit=function(){document.body.style.height=window.visualViewport.height+'px';window.scrollTo(0,0)};
+    window.visualViewport.addEventListener('resize',fit);window.visualViewport.addEventListener('scroll',fit);
+  }
+
+  /* ---------- pantalla completa ---------- */
+  function goFull(){
+    try{var d=document.documentElement;
+      if(!document.fullscreenElement&&d.requestFullscreen)d.requestFullscreen({navigationUI:'hide'}).catch(function(){});
+    }catch(e){}
+  }
+  $('btnFull').onclick=function(){try{if(document.fullscreenElement)document.exitFullscreen();else goFull()}catch(e){}};
+  if(!document.documentElement.requestFullscreen)$('btnFull').style.display='none';
+
+  /* ---------- puntuación del habla ---------- */
+  var Q=/^(qué|cómo|cuándo|dónde|quién|quiénes|cuál|cuáles|cuánto|cuánta|cuántos|cuántas|por qué|para qué|quien|quienes|cual|cuales|cuanto|cuantos|cuantas)\b/i;
+  function punct(t,fin){
+    t=(' '+t+' ')
+      .replace(/\s+punto y coma\b/gi,';').replace(/\s+dos puntos\b/gi,':')
+      .replace(/\s+(?:signo de )?interrogaci[oó]n\b/gi,'?').replace(/\s+(?:signo de )?exclamaci[oó]n\b/gi,'!')
+      .replace(/\s+coma\b/gi,',').replace(/\s+punto\b/gi,'.').trim();
+    if(!t)return t;
+    if(fin&&!/[.?!;:]$/.test(t))t+=Q.test(t)?'?':'.';
+    var parts=t.match(/[^.?!]+[.?!]*/g)||[t];
+    return parts.map(function(s){
+      s=s.trim();if(!s)return '';
+      var q=/\?$/.test(s)||(fin&&Q.test(s)),e=/!$/.test(s);
+      s=s.replace(/^(\S)/,function(c){return c.toUpperCase()});
+      if(q&&s[0]!=='¿')s='¿'+s.replace(/^¿/,'');
+      else if(e&&s[0]!=='¡')s='¡'+s;
+      return s;
+    }).join(' ');
+  }
+
+  function status(t){$('status').textContent=t}
+  function lobby(t){$('lobbyMsg').textContent=t}
+  function say(mine,who,text){
+    var d=document.createElement('div');d.className='msg '+(mine?'mine':'');
+    var s=document.createElement('small');s.textContent=who;
+    var p=document.createElement('span');p.textContent=text;
+    d.appendChild(s);d.appendChild(p);
+    var l=$('log');l.appendChild(d);l.scrollTop=l.scrollHeight;
+  }
+  function showCap(t){var c=$('cap');c.textContent=t;c.scrollTop=c.scrollHeight}
+  function speak(t){
+    try{if(!voiceOn||!window.speechSynthesis)return;
+      var u=new SpeechSynthesisUtterance(t);u.lang='es-CO';speechSynthesis.cancel();speechSynthesis.speak(u);}catch(e){}
+  }
+  function sendAll(d){Object.keys(P).forEach(function(k){var c=P[k].conn;if(c&&c.open)c.send(d)})}
+  function empty(text,code){
+    var e=$('empty');e.innerHTML='';
+    var a=document.createElement('div');a.textContent=text;e.appendChild(a);
+    if(code){var b=document.createElement('div');b.className='code';b.textContent=code;e.appendChild(b)}
+  }
+
+  /* ---------- participantes ---------- */
+  function roleWord(r){return r==='sorda'?'persona sorda':r==='oyente'?'oyente':'participante'}
+  function label(p){return p.name?p.name+' ('+roleWord(p.role)+')':(roleWord(p.role).charAt(0).toUpperCase()+roleWord(p.role).slice(1))}
+  function shortName(p){return p.name||(p.role==='sorda'?'Persona sorda':p.role==='oyente'?'Oyente':'Participante')}
+  function layout(){
+    var vis=0;Object.keys(P).forEach(function(k){if(P[k].has)vis++});
+    $('grid').style.gridTemplateColumns='repeat('+Math.max(vis,1)+',1fr)';
+    $('empty').style.display=vis?'none':'flex';
+  }
+  function refreshEmpty(){
+    var n=Object.keys(P).length;
+    if(n)empty('Conectando video…');
+    else if(isHost)empty('Esperando a las demás personas. Código de la sala:',roomCode.toUpperCase());
+    else empty('No hay nadie más en la sala.');
+    layout();updateStatus();
+  }
+  function updateStatus(){
+    var names=Object.keys(P).filter(function(k){return P[k].role}).map(function(k){return label(P[k])});
+    if(names.length)status('En la sala: '+names.join(', ')+'.');
+  }
+  function getP(id){
+    if(P[id])return P[id];
+    var tile=document.createElement('div');tile.className='tile';
+    var v=document.createElement('video');v.setAttribute('playsinline','');v.autoplay=true;
+    var tg=document.createElement('span');tg.className='tag';
+    tile.appendChild(v);tile.appendChild(tg);$('grid').appendChild(tile);
+    P[id]={id:id,conn:null,call:null,role:'',name:'',tile:tile,v:v,tag:tg,has:false};
+    refreshEmpty();return P[id];
+  }
+  function removeP(id){
+    var p=P[id];if(!p)return;
+    try{p.tile.remove()}catch(e){}
+    try{if(p.conn)p.conn.close()}catch(e){}
+    try{if(p.call)p.call.close()}catch(e){}
+    delete P[id];status((p.name||'La otra persona')+' salió.');refreshEmpty();
+  }
+
+  /* ---------- rol ---------- */
+  function pickRole(r){
+    myRole=r;
+    $('rS').setAttribute('aria-pressed',r==='sorda'?'true':'false');
+    $('rO').setAttribute('aria-pressed',r==='oyente'?'true':'false');
+    lobby('');
+  }
+  $('rS').onclick=function(){pickRole('sorda')};
+  $('rO').onclick=function(){pickRole('oyente')};
+  function syncV(){var b=$('btnVoice');b.setAttribute('aria-pressed',voiceOn?'true':'false');b.textContent=voiceOn?'Texto + voz':'Solo texto'}
+  function applyRole(){
+    var sorda=myRole==='sorda';
+    $('btnListen').style.display=sorda?'none':'';
+    $('btnVoice').style.display=sorda?'none':'';
+    voiceOn=!sorda;syncV();
+  }
+
+  /* ---------- cámara ---------- */
+  function blankStream(){
+    var c=document.createElement('canvas');c.width=160;c.height=120;
+    c.getContext('2d').fillRect(0,0,160,120);return c.captureStream(1);
+  }
+  function startCam(){
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return Promise.resolve('Este navegador no permite usar la cámara (la página debe abrirse con https).');
+    return navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false}).then(function(s){
+      stream=s;var v=$('lv');v.srcObject=s;v.style.display='block';return '';
+    }).catch(function(e){return 'No pudimos abrir tu cámara ('+(e.name||'error')+'). Puedes entrar igual y ver a las demás personas.'});
+  }
+
+  /* ---------- conexiones ---------- */
+  function others(except){return Object.keys(P).filter(function(k){return k!==except})}
+  function attachCall(c){
+    var p=getP(c.peer);p.call=c;
+    c.on('stream',function(s){p.v.srcObject=s;p.tile.style.display='block';p.has=true;layout()});
+    c.on('close',function(){removeP(c.peer)});
+  }
+  function attachConn(c){
+    var p=getP(c.peer);p.conn=c;
+    c.on('open',function(){
+      c.send({k:'hello',r:myRole,n:myName});
+      if(isHost)c.send({k:'peers',ids:others(c.peer)});
+    });
+    c.on('data',function(x){
+      if(!x)return;
+      if(x.k==='hello'&&(x.r==='sorda'||x.r==='oyente')){
+        p.role=x.r;p.name=String(x.n||'').slice(0,20);p.tag.textContent=shortName(p);updateStatus();return;
+      }
+      if(x.k==='peers'&&Array.isArray(x.ids)){x.ids.slice(0,MAX_OTHERS).forEach(function(id){if(typeof id==='string'&&!P[id])connectTo(id)});return}
+      if(x.k==='full'){
+        lobby('La sala ya tiene 3 personas.');leave(false);return;
+      }
+      if(typeof x.t!=='string')return;var t=x.t.slice(0,500);
+      if(x.k==='cap'&&myRole==='sorda'){
+        var pre=Object.keys(P).length>1?shortName(p)+': ':'';
+        showCap(pre+t);if(x.f)say(false,shortName(p)+' (voz)',t);
+      }else if(x.k==='txt'){
+        say(false,label(p),t);
+        if(p.role==='sorda')speak(t);
+      }
+    });
+    c.on('close',function(){removeP(c.peer)});
+  }
+  function connectTo(id){
+    if(P[id]||Object.keys(P).length>=MAX_OTHERS+1)return;
+    attachConn(peer.connect(id,{reliable:true}));
+    attachCall(peer.call(id,stream||blankStream()));
+  }
+  function full(c){
+    c.on('open',function(){c.send({k:'full'});setTimeout(function(){try{c.close()}catch(e){}},400)});
+  }
+  function leave(reload){
+    Object.keys(P).forEach(function(k){try{P[k].tile.remove()}catch(e){}});P={};
+    try{if(peer)peer.destroy()}catch(e){}peer=null;
+    try{if(stream)stream.getTracks().forEach(function(t){t.stop()})}catch(e){}stream=null;
+    try{if(rec){listening=false;rec.stop()}}catch(e){}
+    try{if(document.fullscreenElement)document.exitFullscreen()}catch(e){}
+    if(reload)location.reload();else show(false);
+  }
+
+  function enter(code,host){
+    if(!myRole){lobby('Primero elige si eres persona sorda u oyente.');return}
+    code=(code||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+    if(code.length<3){lobby('Escribe un código de al menos 3 letras o números.');return}
+    if(!window.Peer){lobby('No se pudo cargar el conector. Revisa tu internet.');return}
+    goFull();
+    myName=$('nm').value.trim().slice(0,20);
+    isHost=host;roomCode=code;lobby('Entrando…');
+    startCam().then(function(camMsg){
+      peer=host?new Peer(PREFIX+code):new Peer();
+      peer.on('error',function(e){
+        if(e.type==='unavailable-id'){leave(false);lobby('Ese código ya está en uso. Crea la sala otra vez.')}
+        else if(e.type==='peer-unavailable'){leave(false);lobby('No existe una sala con ese código. Revisa que ya la hayan creado.')}
+        else status('Problema de conexión: '+e.type);
+      });
+      peer.on('connection',function(c){
+        if(!P[c.peer]&&Object.keys(P).length>=MAX_OTHERS){full(c);return}
+        attachConn(c);
+      });
+      peer.on('call',function(c){
+        if(!P[c.peer]&&Object.keys(P).length>=MAX_OTHERS)return;
+        c.answer(stream||blankStream());attachCall(c);
+      });
+      peer.on('open',function(){
+        show(true);applyRole();
+        status(camMsg||'Listo.');
+        if(!host)attachConn(peer.connect(PREFIX+code,{reliable:true})),attachCall(peer.call(PREFIX+code,stream||blankStream()));
+        refreshEmpty();
+        if(camMsg)status(camMsg);
+        if(myRole==='oyente'&&SR){listening=true;syncL();startRec()}
+      });
+    });
+  }
+  function show(inCall){
+    $('lobby').style.display=inCall?'none':'block';
+    $('call').style.display=inCall?'flex':'none';
+    $('compose').style.display=inCall?'block':'none';
+  }
+  $('btnNew').onclick=function(){
+    var c='',k='abcdefghjkmnpqrstuvwxyz23456789';
+    for(var i=0;i<4;i++)c+=k[Math.floor(Math.random()*k.length)];
+    enter(c,true);
+  };
+  $('btnJoin').onclick=function(){enter($('code').value,false)};
+  $('btnLeave').onclick=function(){leave(true)};
+
+  /* ---------- subtítulos de mi voz (oyente) ---------- */
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  function startRec(){
+    rec=new SR();rec.lang='es-CO';rec.continuous=true;rec.interimResults=true;
+    rec.onresult=function(e){
+      var interim='';
+      for(var i=e.resultIndex;i<e.results.length;i++){
+        var r=e.results[i],t=r[0].transcript.trim();
+        if(r.isFinal){if(t){t=punct(t,true).slice(0,500);say(true,'Tú (voz)',t);sendAll({k:'cap',t:t,f:1})}}
+        else interim+=t+' ';
+      }
+      interim=interim.trim();
+      if(interim&&Date.now()-lastCap>300){
+        lastCap=Date.now();sendAll({k:'cap',t:punct(interim,false).slice(0,500),f:0});
+      }
+    };
+    rec.onerror=function(e){if(e.error==='not-allowed'||e.error==='service-not-allowed'){listening=false;syncL();status('Falta el permiso del micrófono.')}};
+    rec.onend=function(){if(listening){try{rec.start()}catch(e){}}};
+    try{rec.start()}catch(e){}
+  }
+  function syncL(){var b=$('btnListen');b.setAttribute('aria-pressed',listening?'true':'false');b.textContent=listening?'Detener subtítulos':'Subtitular mi voz'}
+  $('btnListen').onclick=function(){
+    if(!SR){status('Los subtítulos de voz funcionan en Chrome o Edge.');return}
+    listening=!listening;syncL();
+    if(listening){status('Enviando tus palabras como subtítulos. Di “coma”, “punto” o “interrogación” para puntuar.');startRec()}
+    else{status('Subtítulos detenidos.');try{rec.stop()}catch(e){}}
+  };
+  $('btnVoice').onclick=function(){
+    voiceOn=!voiceOn;syncV();
+    if(!voiceOn&&window.speechSynthesis)speechSynthesis.cancel();
+  };
+  function setSize(n){size=Math.max(16,Math.min(44,n));document.documentElement.style.setProperty('--cap',size+'px')}
+  $('sm').onclick=function(){setSize(size-4)};
+  $('lg').onclick=function(){setSize(size+4)};
+
+  /* ---------- mensajes escritos ---------- */
+  function send(){
+    var m=$('msg'),t=m.value.trim();if(!t)return;
+    say(true,'Tú',t);sendAll({k:'txt',t:t.slice(0,500)});m.value='';
+  }
+  $('btnSend').onclick=send;
+  $('msg').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();send()}});
+})();
+</script>
+</body>
+</html>

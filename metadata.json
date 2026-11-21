@@ -1,0 +1,6 @@
+{
+  "name": "SeñaVoz",
+  "description": "Plataforma de videollamadas accesibles entre personas sordas y oyentes con subtítulos en vivo, síntesis de voz, diccionario y asistencia inteligente.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
